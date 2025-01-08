@@ -7,5 +7,3 @@ TicTacToe code example using:
 ## Code examples progress
 You can see the steps in developing the code examples by looking at tags:
 https://github.com/WeeHorse/tictactoe/tags
-
-
