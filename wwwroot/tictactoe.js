@@ -26,7 +26,14 @@ $('#add-player').on('submit', addPlayer) // onsubmit for the addPlayer form
 
 async function addPlayer(e) {
   e.preventDefault()
-  player = {id:1}
+  const playerName = $('#add-player>[name="name"]').val()
+  const response = await fetch('/api/add-player/', { // post
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: playerName })
+  });
+  player = await response.json();
+  $('#message').text(thisPlayer.name + ' lades till i spelet')
   refresh()
 }
 
@@ -34,7 +41,8 @@ $('#add-game').on('submit', addGame) // onsubmit for the addGame form
 
 async function addGame(e) {
   e.preventDefault()
-  const response = await fetch('/api/current-game/1')
+  const gamecode = $('#add-game>[name="gamecode"]').val()
+  const response = await fetch('/api/current-game/' + gamecode)
   game = await response.json();
   refresh()
 }
