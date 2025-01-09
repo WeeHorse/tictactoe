@@ -27,4 +27,5 @@ body {
 #tictactoe>input {
     cursor: pointer;
     text-align: center;
+    font-size: 10vw;
 }
