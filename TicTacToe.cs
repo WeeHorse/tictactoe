@@ -32,6 +32,18 @@ public class TicTacToeGame
             var player = await AddPlayer(requestBody.name, context.Request.Cookies["ClientId"]);
             return player.id > 0 ? Results.Ok(player) : Results.StatusCode(500);
         });
+        
+        // Map incomming request to play a tile (make a move) in a game
+        app.MapPost("/api/play-tile", async (HttpContext context) =>
+        {
+            var requestBody = await context.Request.ReadFromJsonAsync<Move>();
+            if (requestBody?.tile is null || requestBody?.player is null || requestBody?.game is null)
+            {
+                return Results.BadRequest("tile (index), player (id) and game (id) is required.");
+            }
+            bool success = await PlayTile(requestBody.tile, requestBody.player, requestBody.game);
+            return success ? Results.Ok(true) : Results.Ok(false);
+        });
     }
 
     async Task<Game>? GetCurrentGame(string gamecode)
@@ -83,7 +95,31 @@ public class TicTacToeGame
         return null;
     }
     
-    
+    // Process incomming PlayTile from client
+    async Task<bool> PlayTile(int tile, int player, int game)
+    {
+        await using var cmd1 = db.CreateCommand("SELECT EXISTS (SELECT 1 FROM moves WHERE tile = $1 AND game = $2)"); // fast, if move already exists in table, query 
+        cmd1.Parameters.AddWithValue(tile);
+        cmd1.Parameters.AddWithValue(game);
+        bool result = (bool)(await cmd1.ExecuteScalarAsync() ?? false); // Execute fast boolean query 
+        Console.WriteLine($"Player {player} played at {tile} in game {game} with result {result}");
+        if (result)
+        {
+            return false; // Return false if the move is unsuccessful, which is is, if move already exists in the database
+        }
+        
+        // insert move (played tile)
+        await using var cmd = db.CreateCommand("INSERT INTO moves (tile, player, game) VALUES ($1, $2, $3)");
+        cmd.Parameters.AddWithValue(tile);
+        cmd.Parameters.AddWithValue(player);
+        cmd.Parameters.AddWithValue(game);
+        int rowsAffected = await cmd.ExecuteNonQueryAsync(); // Returns the number of rows affected
+        if (rowsAffected > 0)
+        {
+            return true; // Return true if the move was successful, which it should be, since move did not already exist in the database  
+        }
+        return false; // (failure to write to db)
+    }
 
     
 }
