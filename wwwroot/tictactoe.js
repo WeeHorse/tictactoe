@@ -1,7 +1,11 @@
 let player = null;
 let game = null;
+let players = [];
 
-function refresh(){ // a sequence to handle reflecting the current game state for any connected user
+// refresh is a sequence to handle reflecting the current game state for any connected user
+function refresh(){ 
+  // checkWin here
+  // await checkWin(game);
   // disable all game input until we know who may play
   $('#tictactoe input').prop('disabled', true);
   console.log(player, game)
@@ -20,12 +24,12 @@ function refresh(){ // a sequence to handle reflecting the current game state fo
   }
 }
 
-// first refresh when page has loaded. 
+// first call refresh when page has loaded to reflect inital state / rebuild current state
 // Then call refesh whenever something has changed, to ensure that both connected players clients reflect the current state
 refresh()
 
 function showPlayableTiles(){
-  // who playable tiles if player is current player, 
+  // show playable tiles if player is current player, 
   // @todo find out from game state 
   $('#tictactoe input').each(function(){
     //if($(this).val() == "") {
@@ -47,7 +51,7 @@ async function addPlayer(e) {
     body: JSON.stringify({ name: playerName })
   });
   player = await response.json();
-  $('#message').text(player.name + ' lades till i spelet')
+  $('#message').text(player.name + ' was added to the game')
   refresh()
 }
 
@@ -58,10 +62,11 @@ async function addGame(e) {
   const gamecode = $('#add-game>[name="gamecode"]').val()
   const response = await fetch('/api/current-game/' + gamecode)
   game = await response.json();
+  player.tile = (player.id === game.player_1)?'X':'O'; // Are you player 1? Then you get X, else O.
   if(game){
     $('#message').text('Connected to ' + game.gamecode)
   }else{
-    $('#message').text('Hittade inget spel med koden ' + gamecode)
+    $('#message').text('Found no game with the code ' + gamecode)
   }
   refresh()
 }
@@ -69,8 +74,6 @@ async function addGame(e) {
 $('#tictactoe>input').on('click', playTile);
 async function playTile() {
   let tileIndex = $(this).index();
-  // set the tile value to X when user clicks on it  @todo should be able to be O aswell
-  $(this).val('X')
   const response = await fetch('/api/play-tile/', { // post (save new move)
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -80,7 +83,12 @@ async function playTile() {
       game: game.id
     })
   });
-  const data = await response.json();
-  console.log('played tile data', data)
-  // await checkWin(players[0], game);
+  const moveAccepted = await response.json();
+  if(moveAccepted){
+    $(this).val(player.tile) // player tile X or O is decided in addGame (player 1 is X, player 2 is O)
+    $('#message').text('Move accepted, with ' + player.tile + ' at index ' + tileIndex)
+  }else{
+    $('#message').text('This tile is already taken')
+  }
+  refresh();
 }
