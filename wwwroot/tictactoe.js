@@ -1,14 +1,9 @@
 let player = null;
 let game = null;
-let players = [];
+let playedTiles = []; 
 
 // refresh is a sequence to handle reflecting the current game state for any connected user
-function refresh(){ 
-  // checkWin here
-  // await checkWin(game);
-  // disable all game input until we know who may play
-  $('#tictactoe input').prop('disabled', true);
-  console.log(player, game)
+async function refresh(){
   // make sure you have a player
   if(!player){
     $('#add-player').show()
@@ -19,25 +14,97 @@ function refresh(){
       $('#add-game').show()
     }else{
       $('#add-game').hide()
-      showPlayableTiles()
     }
+  }
+  // until we have a game
+  if(!player || !game){
+    // disable tiles
+    $('#tictactoe input').prop('disabled', true);
+  }else{
+    // poll refresh continously to reflect the game state for both connected players
+    let timeout = setTimeout(async function(){
+      // check tiles update
+      const response = await fetch('/api/played-tiles/' + game.id);
+      const playedTilesUpdate = await response.json();
+      // only refresh the board if something has changed
+      if(playedTilesUpdate != playedTiles){
+        playedTiles = playedTilesUpdate
+        // reflect played tiles
+        showPlayableTiles(playedTiles)
+        // tell who's turn
+        tellTurn(playedTiles)
+      }
+      // check win
+      if(await checkWin(game)){
+        clearTimeout(timeout);
+        return; // stop polling, game is over whoever won
+      }
+      await refresh()
+    }, 300) // poll every 0.3 sec
   }
 }
 
 // first call refresh when page has loaded to reflect inital state / rebuild current state
-// Then call refesh whenever something has changed, to ensure that both connected players clients reflect the current state
 refresh()
 
-function showPlayableTiles(){
-  // show playable tiles if player is current player, 
-  // @todo find out from game state 
+
+function showPlayableTiles(playedTiles){
+  const playedTilesHash = {}
+  for(let tile of playedTiles){
+    playedTilesHash[tile.tile] = tile
+  }
+  // enable all, and then disable the ones already played
+  $('#tictactoe input').prop('disabled', false);
   $('#tictactoe input').each(function(){
-    //if($(this).val() == "") {
-      $(this).prop('disabled', false);
-    //}
+    let tile = playedTilesHash[$(this).index()];
+    if(tile?.tile > -1){ // if this index exists in the hash
+      $(this).prop('disabled', true);
+      if(tile.player === player.id){
+        $(this).val(player.tile)
+      }else{
+        $(this).val(player.tile === 'X'?'O':'X') // the other player gets whatever tile you don't have
+      }
+    }
   })
 }
 
+function tellTurn(playedTiles){
+  let yourMoves = 0;
+  let otherMoves = 0;
+  for(let tile of playedTiles){
+    if(tile.player === player.id){
+      yourMoves++
+    }else{
+      otherMoves++
+    }
+  }
+  // player with tile X plays first
+  if(player.tile === 'X' && yourMoves <= otherMoves || player.tile === 'O' && yourMoves < otherMoves){
+    $('#message').text('It is you turn, ' + player.name + ' to play a ' + player.tile)
+  }else{
+    $('#message').text('It is their turn')
+    // if it's their turn we disable all tiles for us
+    $('#tictactoe input').prop('disabled', true);
+  }
+}
+
+async function checkWin() {
+  const response = await fetch('/api/check-win/' + game.id);
+  const win = await response.json();
+  if(win){
+    $('#message').text('Raden ' + win.join(' - ') + ' vann!')
+    // disable tiles
+    $('#tictactoe input').prop('disabled', true);
+    // show winning row
+    $('#tictactoe input').each(function() {
+      if(win.includes($(this).index())){
+        $(this).css('background-color', 'yellow')
+      }
+    })
+    return true;
+  }
+  return false;
+}
 
 
 $('#add-player').on('submit', addPlayer) // onsubmit for the addPlayer form

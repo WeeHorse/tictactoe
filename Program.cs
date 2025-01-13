@@ -29,7 +29,7 @@ app.Use(async (context, next) =>
     }
     else
     {
-        Console.WriteLine($"Existing client ID found: {clientId}");
+        // Console.WriteLine($"Existing client ID found: {clientId}");
     }
 
     // Pass to the next middleware

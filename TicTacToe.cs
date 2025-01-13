@@ -20,6 +20,12 @@ public class TicTacToeGame
         // Map incomming request for current game data
         app.MapGet("/api/current-game/{gamecode}", GetCurrentGame);
         
+        // Map incomming request for played tiles in game
+        app.MapGet("/api/played-tiles/{id}", GetPlayedTiles);
+        
+        // Map incomming request to check win for a game
+        app.MapGet("/api/check-win/{game}", CheckWin);
+        
         // Map incomming request to add a player to a game
         app.MapPost("/api/add-player", async (HttpContext context) =>
         {
@@ -58,6 +64,21 @@ public class TicTacToeGame
             }
         }
         return null;
+    }
+    
+    async Task<List<Move>> GetPlayedTiles(int id)
+    {
+        var playedTiles = new List<Move>();
+        await using var cmd = db.CreateCommand("SELECT * FROM moves WHERE game = $1");
+        cmd.Parameters.AddWithValue(id);
+        await using (var reader = await cmd.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+            {
+                playedTiles.Add(new Move(reader.GetInt32(0),reader.GetInt32(1),reader.GetInt32(2)));
+            }
+        }
+        return playedTiles;
     }
     
     // Add player, by player name. If player by that name don't exist in the database, a new player with that name is created, 
@@ -121,5 +142,80 @@ public class TicTacToeGame
         return false; // (failure to write to db)
     }
 
+    async Task<List<int>?> CheckWin(int game)
+    {
+        
+        // Defining wins, using a list of Tuples with indices. A Tuple is a read only, fixed size, list-type structure.
+        // The indices are a serialization of the tiles in our tictactoe game with the top left index being 0 and the bottom right being 8.
+        // Serializing game boards like this is a common and practical solution. 
+        var winningVectors = new List<Tuple<int, int, int>>
+        {
+            // Horizontal wins 
+            Tuple.Create(0, 1, 2),
+            Tuple.Create(3, 4, 5),
+            Tuple.Create(6, 7, 8),
+            
+            // Vertical wins
+            Tuple.Create(0, 3, 6),
+            Tuple.Create(1, 4, 7),
+            Tuple.Create(2, 5, 8),
+            
+            // Diagonal wins
+            Tuple.Create(0, 4, 8),
+            Tuple.Create(2, 4, 6)
+        };
+        
+        // Get the tiles for each player
+        var player1tiles = new List<int>();
+        var player2tiles = new List<int>();
+        int? player_1 = null;
+        int? player_2 = null;
+        await using var cmd = db.CreateCommand("SELECT moves.tile, moves.player, games.player_1, games.player_2 FROM moves, games WHERE moves.game = games.id AND games.id = $1");
+        cmd.Parameters.AddWithValue(game);
+        await using (var reader = await cmd.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+            {
+                var tile = reader.GetInt32(0);
+                var player = reader.GetInt32(1);
+                player_1 = reader.GetInt32(2);
+                player_2 = reader.GetInt32(3);
+                if (player == player_1)
+                {
+                    player1tiles.Add(tile);  
+                }
+                else
+                {
+                    player2tiles.Add(tile);
+                }
+            }
+        }
+        
+        // Now lets see if a player has a win
+        int? winningPlayer = null;
+        foreach (var vector in winningVectors)
+        {
+            if (player1tiles.Contains(vector.Item1) && player1tiles.Contains(vector.Item2) &&
+                player1tiles.Contains(vector.Item3))
+            {
+                winningPlayer = player_1;
+            }else if (player2tiles.Contains(vector.Item1) && player2tiles.Contains(vector.Item2) &&
+                      player2tiles.Contains(vector.Item3))
+            {
+                winningPlayer = player_2; // we are not reporting who won.. that ends here, but we should
+            }
+            if(winningPlayer is not null){
+                Console.WriteLine($"Winning vector: {vector.Item1}, {vector.Item2}, {vector.Item3}");
+                // if we have a match, return the winning vector as a confirmation of the win
+                var winningVector = new List<int>();
+                winningVector.Add(vector.Item1);
+                winningVector.Add(vector.Item2);
+                winningVector.Add(vector.Item3);
+                return winningVector;
+            }
+        }
+        // if we don't have a match, return null
+        return null;
+    }
     
 }
